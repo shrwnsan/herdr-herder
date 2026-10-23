@@ -10,7 +10,7 @@
 
 id = "shrwnsan.herder"
 name = "herder"
-version = "0.6.0"
+version = "0.6.1"
 min_herdr_version = "0.8.0"
 description = "One who herds: move pane/tab picker + even widths (even-panes)."
 platforms = ["linux", "macos"]
