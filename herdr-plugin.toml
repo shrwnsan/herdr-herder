@@ -1,0 +1,36 @@
+# herder — one picker, two moves.
+#
+# prefix+o opens "move pane to..." (default). Tab flips to "move tab to...".
+# Enter executes, Esc aborts. Navigation is core (prefix+g); same-tab swap is
+# core (prefix+shift+h/j/k/l); even widths is bin/even-panes (prefix+e).
+#
+# Actions run detached (no TTY): open.sh only opens the popup pane, forwarding
+# the invoking pane/tab/workspace ids. The pane is spawned into a PTY and runs
+# the interactive picker (fzf UI on the pane tty — the proven shape).
+
+id = "shrwnsan.herder"
+name = "herder"
+version = "0.6.0"
+min_herdr_version = "0.8.0"
+description = "One who herds: move pane/tab picker + even widths (even-panes)."
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "even"
+title = "Herder: even pane widths (50/50 per split)"
+contexts = ["pane"]
+command = ["sh", "-c", 'exec "$HERDR_PLUGIN_ROOT/bin/even-panes" "${HERDR_PANE_ID:-$HERDR_ACTIVE_PANE_ID}"']
+
+[[actions]]
+id = "organize"
+title = "Herder: move pane/tab to..."
+contexts = ["pane"]
+command = ["./bin/open.sh"]
+
+[[panes]]
+id = "organize"
+title = "herder · move"
+placement = "popup"
+width = 70
+height = 18
+command = ["sh", "-c", 'exec "$HERDR_PLUGIN_ROOT/bin/picker.py"']

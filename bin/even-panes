@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""even-panes — evenly distribute panes in a herdr tab.
+
+Usage: even-panes [-n] [pane_id]
+
+Even rule: every split sits at 50/50. In a mixed tree this keeps columns
+at half width and rows at half height, so a lone pane never shrinks to a
+1/N sliver; a flat row of N panes is nested binary splits, so N=3 lands
+at half, quarter, quarter rather than equal thirds.
+
+-n / --dry-run prints the plan without applying.
+
+Tree model: `herdr pane layout` split ids encode the navigation path from
+the root (split_2_00 -> path [first, first]); layout.set_split_ratio takes
+exactly that path with ratio = first child's share.
+
+-n works in any argument position; empty pane-id args (e.g. an unset
+HERDR_ACTIVE_PANE_ID in the shell binding) fall back to the focused pane.
+"""
+import json, os, socket, subprocess, sys
+
+DRY = any(a in ("-n", "--dry-run") for a in sys.argv[1:])
+args = [a for a in sys.argv[1:] if a and a not in ("-n", "--dry-run")]
+
+
+def die(msg):
+    print(f"even-panes: {msg}", file=sys.stderr); sys.exit(1)
+
+
+def pane_layout(pane):
+    out = subprocess.run(["herdr", "pane", "layout", "--pane", pane],
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        die(f"pane layout failed: {out.stderr.strip()}")
+    return json.loads(out.stdout)["result"]["layout"]
+
+
+# resolve target pane
+if args:
+    target = args[0]
+else:
+    out = subprocess.run(["herdr", "pane", "list"], capture_output=True, text=True)
+    panes = json.loads(out.stdout)["result"]["panes"]
+    focused = [p for p in panes if p.get("focused")]
+    if not focused:
+        die("no pane id given and no focused pane found")
+    target = focused[0]["pane_id"]
+
+layout = pane_layout(target)
+if layout.get("zoomed"):
+    die("tab is zoomed — unzoom first")
+panes = layout["panes"]
+if len(panes) < 2:
+    print(f"even-panes: single pane in {layout['tab_id']}, nothing to even"); sys.exit(0)
+
+splits = layout["splits"]
+
+
+def parse_path(sid):  # "split_2_00" -> "00", "split_0_root" -> ""
+    parts = sid.split("_")
+    return "" if parts[2] == "root" else parts[2]
+
+
+paths = {parse_path(s["id"]) for s in splits}
+
+# Even rule: every split sits at 50/50 (tmux even-horizontal/vertical semantics).
+# In a mixed tree this keeps columns at half width and rows at half height,
+# instead of leaf-share area math that shrinks single-pane columns to 1/N.
+
+
+def leaves(p):  # leaf-panes under the node at path p (a non-split path IS one pane)
+    if p not in paths:
+        return 1
+    return leaves(p + "0") + leaves(p + "1")
+
+
+if leaves("") != len(panes):
+    die(f"tree mismatch: {leaves('')} leaves counted vs {len(panes)} panes — aborting")
+
+before = {p["pane_id"]: (p["rect"]["width"], p["rect"]["height"]) for p in panes}
+WANT = 0.5
+plan = []
+for s in splits:
+    p = parse_path(s["id"])
+    if abs(s["ratio"] - WANT) > 1e-4:
+        plan.append((s["id"], p, s["ratio"], WANT))
+
+print(f"tab {layout['tab_id']} — {len(panes)} panes, geometry now: "
+      + " ".join(f"{pid}:{w}x{h}" for pid, (w, h) in before.items()))
+if not plan:
+    print("already even"); sys.exit(0)
+for sid, p, old, new in plan:
+    print(f"  {sid}: ratio {old:.3f} -> {new:.3f}")
+if DRY:
+    print("(dry-run — nothing applied)"); sys.exit(0)
+
+sock_path = os.environ.get("HERDR_SOCKET_PATH",
+                           os.path.expanduser("~/.config/herdr/herdr.sock"))
+
+def rpc(req):  # one request per connection — the server closes after replying
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(5)
+    s.connect(sock_path)
+    s.sendall((json.dumps(req) + "\n").encode())
+    resp = json.loads(s.recv(65536).decode().splitlines()[0])
+    s.close()
+    if resp.get("type") == "error" or "error" in resp:
+        die(f"set_split_ratio failed on {req['id']}: {resp}")
+
+
+for sid, p, old, new in plan:
+    rpc({"id": f"even-panes:{sid}", "method": "layout.set_split_ratio",
+         "params": {"pane_id": target, "path": [c == "1" for c in p],
+                    "ratio": round(new, 6)}})
+
+after_layout = pane_layout(target)
+tot = after_layout["area"]["width"] * after_layout["area"]["height"]
+after = {p["pane_id"]: (p["rect"]["width"], p["rect"]["height"]) for p in after_layout["panes"]}
+print("geometry after (50/50 per split):")
+for pid, (w, h) in after.items():
+    changed = "" if (w, h) == before[pid] else f"  (was {before[pid][0]}x{before[pid][1]})"
+    print(f"  {pid}: {w}x{h} = {100 * w * h // tot}%{changed}")
