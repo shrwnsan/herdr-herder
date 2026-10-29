@@ -3,10 +3,14 @@
 
 Usage: even-panes [-n] [pane_id]
 
-Even rule: every split sits at 50/50. In a mixed tree this keeps columns
-at half width and rows at half height, so a lone pane never shrinks to a
-1/N sliver; a flat row of N panes is nested binary splits, so N=3 lands
-at half, quarter, quarter rather than equal thirds.
+Even rule: equal cell widths per column, equal cell heights per row
+(tmux even-horizontal/vertical semantics, generalized to mixed trees).
+A right-split's ratio = its first child's column share; a down-split's
+ratio = its first child's row share. A down-split child spans the same
+columns as its sibling, and vice versa, so lone panes keep full column
+width (no 1/N slivers) while nested N-panes land at exact 1/N: 3 flat
+panes -> thirds, 4 -> quarters, "tall pane + 2 stacked" -> 50/50 columns
+with 50/50 rows.
 
 -n / --dry-run prints the plan without applying.
 
@@ -63,27 +67,39 @@ def parse_path(sid):  # "split_2_00" -> "00", "split_0_root" -> ""
 
 paths = {parse_path(s["id"]) for s in splits}
 
-# Even rule: every split sits at 50/50 (tmux even-horizontal/vertical semantics).
-# In a mixed tree this keeps columns at half width and rows at half height,
-# instead of leaf-share area math that shrinks single-pane columns to 1/N.
+# Even rule: equal columns/rows. A right-split spans cols(first)+cols(second);
+# a down-split's children share one column (and symmetrically for rows).
+
+split_by_path = {parse_path(s["id"]): s for s in splits}
+
+
+def span(p, axis):  # axis "cols" for width-units, "rows" for height-units
+    s = split_by_path.get(p)
+    if s is None:
+        return 1  # a leaf is one column and one row
+    primary = s["direction"] == ("right" if axis == "cols" else "down")
+    if primary:
+        return span(p + "0", axis) + span(p + "1", axis)
+    return span(p + "0", axis)  # perpendicular split: children share the span
 
 
 def leaves(p):  # leaf-panes under the node at path p (a non-split path IS one pane)
-    if p not in paths:
+    if p not in split_by_path:
         return 1
     return leaves(p + "0") + leaves(p + "1")
 
 
 if leaves("") != len(panes):
-    die(f"tree mismatch: {leaves('')} leaves counted vs {len(panes)} panes — aborting")
+    die(f"tree mismatch: {span('', 'cols')} leaves counted vs {len(panes)} panes — aborting")
 
 before = {p["pane_id"]: (p["rect"]["width"], p["rect"]["height"]) for p in panes}
-WANT = 0.5
 plan = []
 for s in splits:
     p = parse_path(s["id"])
-    if abs(s["ratio"] - WANT) > 1e-4:
-        plan.append((s["id"], p, s["ratio"], WANT))
+    axis = "cols" if s["direction"] == "right" else "rows"
+    want = span(p + "0", axis) / span(p, axis)
+    if abs(s["ratio"] - want) > 1e-4:
+        plan.append((s["id"], p, s["ratio"], want))
 
 print(f"tab {layout['tab_id']} — {len(panes)} panes, geometry now: "
       + " ".join(f"{pid}:{w}x{h}" for pid, (w, h) in before.items()))
@@ -115,7 +131,7 @@ for sid, p, old, new in plan:
 after_layout = pane_layout(target)
 tot = after_layout["area"]["width"] * after_layout["area"]["height"]
 after = {p["pane_id"]: (p["rect"]["width"], p["rect"]["height"]) for p in after_layout["panes"]}
-print("geometry after (50/50 per split):")
+print("geometry after (equal columns/rows):")
 for pid, (w, h) in after.items():
     changed = "" if (w, h) == before[pid] else f"  (was {before[pid][0]}x{before[pid][1]})"
     print(f"  {pid}: {w}x{h} = {100 * w * h // tot}%{changed}")

@@ -6,8 +6,11 @@ One picker, two moves:
 
 - **`prefix+o`** (herder.organize) opens a popup: **move pane to...** by default;
   **Tab** flips to **move tab to...**; Enter executes, Esc aborts.
-- **`herder.even`** evens pane widths at 50/50 per split (tmux even semantics,
-  via the bundled `even-panes` script) — bind it to a chord or call it directly.
+- **`herder.even`** evens pane widths to equal columns and rows (tmux
+  `even-horizontal`/`even-vertical` semantics generalized to mixed trees:
+  2 panes → 50/50, 3 flat → thirds, 4 → quarters, stacked columns keep equal
+  column widths with 50/50 rows — no lone-pane slivers), via the bundled
+  `even-panes` script — bind it to a chord or call it directly.
 
 Works alongside herdr's built-ins: navigation stays `prefix+g`, same-tab swaps
 stay `prefix+shift+h/j/k/l`, manual resize stays `prefix+r`. Herder owns the
