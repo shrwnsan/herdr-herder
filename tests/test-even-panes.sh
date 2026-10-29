@@ -94,22 +94,22 @@ assert_not_contains "already-50/50 nested split untouched" "split_1_1: ratio" "$
 assert_contains "dry-run notice present" "(dry-run" "$OUT"
 assert_not_contains "no geometry-after in dry-run" "geometry after" "$OUT"
 
-# --- 2. flat row of 3 as nested 50/50 splits: already even (½/¼/¼) ---------
+# --- 2. flat row of 3 as nested 50/50 splits: planned to equal thirds ------
 
 L2=$(layout tB false \
   "$(pane p1 true 0 0 100 100),$(pane p2 false 100 0 50 50),$(pane p3 false 100 50 50 50)" \
-  "$(split split_0_root right 0.5),$(split split_1_1 down 0.5)")
+  "$(split split_0_root right 0.5),$(split split_1_1 right 0.5)")
 run_even "$L2" "$(plist p1)" -n p1
 report "nested 50/50 row exits cleanly" 0 "$RC"
-assert_contains "flat 3-row already even under 50/50 semantics" "already even" "$OUT"
-assert_not_contains "no plan lines for even tree" "ratio" "$OUT"
+assert_contains "flat 3-row root planned to 1/3 for the lone leaf" "split_0_root: ratio 0.500 -> 0.333" "$OUT"
+assert_not_contains "already-1/2 inner split untouched" "split_1_1: ratio" "$OUT"
 
 # --- 3. empty pane-id arg falls back to the focused pane --------------------
 # (the prefix+e binding sends "" when HERDR_ACTIVE_PANE_ID is unset)
 
 run_even "$L2" "$(plist p1)" -n ""
 report "empty arg falls back to focused pane" 0 "$RC"
-assert_contains "resolved focused pane via pane list" "already even" "$OUT"
+assert_contains "resolved focused pane via pane list" "split_0_root" "$OUT"
 
 # --- 4. -n after the pane id still means dry-run ----------------------------
 # (a positional-only DRY check would reach the socket and apply changes)
@@ -146,6 +146,36 @@ L7=$(layout tG false "$(pane p1 true 0 0 200 100)" "")
 run_even "$L7" "$(plist p1)" -n p1
 report "single pane exits 0" 0 "$RC"
 assert_contains "nothing-to-even message" "nothing to even" "$OUT"
+
+# --- 8. tall pane + 2 stacked: 50/50 columns with 50/50 rows stay even ------
+
+L8=$(layout tH false \
+  "$(pane pL true 0 0 100 100),$(pane pT false 100 0 100 50),$(pane pB false 100 50 100 50)" \
+  "$(split split_0_root right 0.5),$(split split_1_1 down 0.5)")
+run_even "$L8" "$(plist pL)" -n pL
+report "stacked-column tree exits cleanly" 0 "$RC"
+assert_contains "stacked column already even (no slivers)" "already even" "$OUT"
+
+# --- 9. four flat panes: nested splits planned to quarters ------------------
+
+L9=$(layout tI false \
+  "$(pane p1 true 50 0 50 100),$(pane p2 false 100 0 50 100),$(pane p3 false 150 0 25 100),$(pane p4 false 175 0 25 100)" \
+  "$(split split_0_root right 0.25),$(split split_1_1 right 0.33),$(split split_1_11 right 0.5)")
+run_even "$L9" "$(plist p1)" -n p1
+report "four-flat exits cleanly" 0 "$RC"
+assert_not_contains "4-flat root already 1/4, untouched" "split_0_root: ratio" "$OUT"
+assert_contains "4-flat second split planned to 1/3" "split_1_1: ratio 0.330 -> 0.333" "$OUT"
+assert_not_contains "already-1/2 tail split untouched" "split_1_11: ratio" "$OUT"
+
+# --- 10. four rows (down-splits): quarters down the column -----------------
+
+L10=$(layout tJ false \
+  "$(pane p1 true 0 25 200 25),$(pane p2 false 0 50 200 25),$(pane p3 false 0 75 200 25),$(pane p4 false 0 0 200 25)" \
+  "$(split split_0_root down 0.25),$(split split_1_1 down 0.33),$(split split_1_11 down 0.5)")
+run_even "$L10" "$(plist p1)" -n p1
+report "four-rows exits cleanly" 0 "$RC"
+assert_not_contains "4-rows root already 1/4, untouched" "split_0_root: ratio" "$OUT"
+assert_contains "4-rows second split planned to 1/3 (down)" "split_1_1: ratio 0.330 -> 0.333" "$OUT"
 
 # --- summary -----------------------------------------------------------------
 

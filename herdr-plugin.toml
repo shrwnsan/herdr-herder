@@ -10,14 +10,14 @@
 
 id = "shrwnsan.herder"
 name = "herder"
-version = "0.6.1"
+version = "0.7.0"
 min_herdr_version = "0.8.0"
 description = "One who herds: move pane/tab picker + even widths (even-panes)."
 platforms = ["linux", "macos"]
 
 [[actions]]
 id = "even"
-title = "Herder: even pane widths (50/50 per split)"
+title = "Herder: even pane widths (equal columns/rows)"
 contexts = ["pane"]
 command = ["sh", "-c", 'exec "$HERDR_PLUGIN_ROOT/bin/even-panes" "${HERDR_PANE_ID:-$HERDR_ACTIVE_PANE_ID}"']
 

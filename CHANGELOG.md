@@ -4,6 +4,23 @@ Versioning: semver, 0.x conventions — features bump the minor, fixes bump the
 patch, behavior/binding changes are called out explicitly. The manifest's
 `version` is the source of truth; this file is the record.
 
+## 0.7.0 — 2026-10-23
+### Changed
+- **`herder.even` even rule rewritten: equal columns/rows** (tmux
+  `even-horizontal`/`even-vertical` semantics, generalized to mixed binary
+  trees). A right-split now targets its first child's *column* share; a
+  down-split targets its first child's *row* share. Consequences per shape:
+  - 2 vertical → 50/50 (unchanged)
+  - 3 flat panes → exact thirds (was ½/¼/¼ under the old per-split 50/50 rule)
+  - 4 flat panes / 4 rows → quarters (was ½/¼/⅛ chains)
+  - tall pane + 2 stacked → 50/50 columns with 50/50 rows (unchanged — no
+    lone-pane 1/N slivers, the original design goal)
+  - mixed trees → equal column widths, equal row heights within columns
+- `herdr-plugin.toml` action title updated to match.
+### Tests
+- Fixture suite extended to 28 cases: flat-row thirds, 4-flat, 4-rows,
+  stacked-column no-sliver, and the corrected first-child-share expectations.
+
 ## 0.6.1 — 2026-10-23
 ### Fixed
 - Bundled `even-panes`: `-n`/`--dry-run` is now honored in any argument position —
